@@ -1,0 +1,13 @@
+__pycache__/
+data/
+images/
+outputs/
+results/
+.vs/
+*.asv
+*.mat
+*.png
+*.jpg
+*.bmp
+*.pdf
+*.docx
