@@ -17,7 +17,7 @@ import pdb
 parser = argparse.ArgumentParser()
 parser.add_argument( '--n_epochs',
                      type=int,
-                     default=20,
+                     default=20000,
                      help='number of epochs of training' )
 parser.add_argument( '--batch_size',
                      type=int,
@@ -53,7 +53,7 @@ parser.add_argument( '--channels',
                      help='number of image channels' )
 parser.add_argument( '--sample_interval',
                      type=int,
-                     default=400,
+                     default=5000,
                      help='interval between image sampling' )
 # These files are already on the VC server. Not sure if students have access to them yet.
 parser.add_argument( '--train_csv',

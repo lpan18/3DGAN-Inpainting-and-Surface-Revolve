@@ -12,6 +12,11 @@ import pdb
 from model import ModelInpaint
 from dcgan import Generator, Discriminator
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument( '--generator',
@@ -82,7 +87,6 @@ def main():
                                               shuffle=False )
     m = ModelInpaint( args )
     for i, ( imgs, masks ) in enumerate( dataloader ):
-        # pdb.set_trace # to debug python
         masks = np.stack( ( masks, ) * 3, axis=1 )
         corrupted = imgs * torch.tensor( masks )
         completed, blended = m.inpaint( corrupted, masks )

@@ -8,10 +8,10 @@ import external.poissonblending as blending
 import numpy as np
 import pdb
 
-cuda = False #True if torch.cuda.is_available() else False
+cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
-class ContextLoss( nn.Module ): # L1 loss
+class ContextLoss( nn.Module ):
     def __init__( self ):
         super( ContextLoss, self ).__init__()
         self.l1_loss = nn.L1Loss()
@@ -23,7 +23,7 @@ class ContextLoss( nn.Module ): # L1 loss
         l_c = l_c.mean(dim = [0,1,2,3])
         return l_c
 
-class PriorLoss(nn.Module): # whether discriminator is happy about the result
+class PriorLoss(nn.Module):
     def __init__(self, discriminator, lam=1):
         super(PriorLoss, self).__init__()
         self.discriminator = discriminator
@@ -45,10 +45,13 @@ class ModelInpaint():
 
         self.generator = torch.load( args.generator )
         self.generator.eval()
-        self.generator.cpu()
+        
         self.discriminator = torch.load( args.discriminator )
         self.discriminator.eval()
-        self.discriminator.cpu()
+        
+        if not cuda:
+          self.generator.cpu()
+          self.discriminator.cpu()
 
     def create_weight_mask( self, unweighted_masks ):
         kernel = np.ones( ( self.n_size, self.n_size ),
@@ -87,14 +90,12 @@ class ModelInpaint():
             weight_mask = weight_mask.cuda()
         print( 'Before optimizing: ' )
         print( z )
-        z_int = z.clone()
         # TODO: Your implementation here
         context_loss = ContextLoss()
         prior_loss = PriorLoss(self.discriminator)
         optimizer = torch.optim.Adam([z.requires_grad_()], lr= 0.001)
 
         for i in range(self.per_iter_step):
-            pdb.set_trace
             generated = self.generator(z)
             l_c = context_loss(generated, corrupted, weight_mask)
             l_p = prior_loss(generated)
