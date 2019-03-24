@@ -10,8 +10,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 import struct
 
+import scipy.ndimage as nd
+import scipy.io as io
+from mpl_toolkits.mplot3d import Axes3D
 
-def read_mnist_2D(filename):
+def read_mnist_2d(filename):
     with open(filename, 'rb') as f:
         _, _, dims = struct.unpack('>HBB', f.read(4))
         shape = tuple(struct.unpack('>I', f.read(4))[0] for i in range(dims))
@@ -19,19 +22,38 @@ def read_mnist_2D(filename):
         result = result.reshape(shape)
         return result
 
+def create_voxels(image):
+    depth = 28
+    voxels = np.array([image for _ in range(depth)])
+    return voxels
+
+def plot_voxels(voxels):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(50)
+    ax.set_xlim(0, 30)
+    ax.set_ylim(0, 30)
+    ax.set_zlim(0, 30)
+    ax.voxels(voxels,edgecolor='k')
+    plt.show()
+
+
 class MNIST3DDataset(Dataset):
     def __init__(self, imgs_path, labels_path):
-        self.images = read_mnist_2D(os.path.join(imgs_path))
-        self.labels = read_mnist_2D(os.path.join(labels_path))
-        self.shape = self.images.shape
-
+        self.images = read_mnist_2d(os.path.join(imgs_path))
+        self.labels = read_mnist_2d(os.path.join(labels_path))
+        
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, idx):
-        image = np.float32(self.images[idx]) / 255.0
+        image = np.float32(self.images[idx]) / 255.
         label = np.asarray(self.labels[idx])
-        img_tensor = torch.from_numpy(image)
+        voxels = create_voxels(image)
+        img_tensor = torch.from_numpy(voxels)
+        shape = img_tensor.shape
+        img_tensor = img_tensor.view((1, shape[0], shape[1], shape[2]))
+        # plot_voxels(img_tensor.squeeze().permute(1,2,0).numpy())
         label_tensor = torch.from_numpy(label).long()
         return img_tensor, label_tensor
 
@@ -41,15 +63,8 @@ if __name__ == '__main__':
     imgs_path = 'data/train-images.idx3-ubyte'
     labels_path = 'data/train-labels.idx1-ubyte'
     dataset = MNIST3DDataset(imgs_path, labels_path)
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=1, shuffle=False)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
     i, (image, label) = next(enumerate(dataloader))
-    plt.imshow(image.reshape(28, 28), cmap='gray')
-    plt.title('Label:' + str(label))
-    plt.show()
-
-    # figs, axes = plt.subplots(1, 4)
-    # for i in range(0, 4):
-    #         axes[i].imshow(images[i].reshape(h, w), cmap='gray')
-    #         axes[i].set_title('Label:' + str(labels[i]))
-    # plt.show()
+#     plt.imshow(image.reshape(28, 28), cmap='gray')
+#     plt.title('Label:' + str(label))
+#     plt.show()
