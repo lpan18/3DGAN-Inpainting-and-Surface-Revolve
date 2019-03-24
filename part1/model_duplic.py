@@ -12,28 +12,26 @@ cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
 class ContextLoss( nn.Module ):
-    def __init__( self ):
+    def __init__( self, generated ):
         super( ContextLoss, self ).__init__()
-        self.l1_loss = nn.L1Loss()
+        self.generated = generated.detach()
 
-    def forward( self, generated, corrupted, weight_mask):
-        # TODO: Your implementation here
-        l1 = self.l1_loss(generated, corrupted)
-        l_c = l1 * weight_mask
-        l_c = torch.mean(l_c)
-        return l_c
+    def forward( self, corrupted, weight_mask ):
+        loss = F.l1_loss( corrupted, self.generated, reduction='none' ) * weight_mask
+        loss = torch.mean( loss )
+        return loss
 
-class PriorLoss(nn.Module):
-    def __init__(self, discriminator, lam=1):
-        super(PriorLoss, self).__init__()
-        self.discriminator = discriminator
+class PriorLoss( nn.Module ):
+    def __init__( self ):
+        super( PriorLoss, self ).__init__()
+        self.normal = torch.distributions.normal.Normal( Tensor( ( 0., ) ),
+                                                         Tensor( ( 1., ) ) )
 
-    def forward(self, generated):
-        validity = self.discriminator(generated)
-        ones = torch.ones_like(validity)
-        l_p = torch.log(ones-validity)
-        l_p = torch.mean(l_p)
-        return l_p
+    def forward( self, z ):
+        loss = self.normal.log_prob( z )
+        loss = -torch.sum( loss )
+        return loss
+
 
 class ModelInpaint():
     def __init__( self, args ):
@@ -41,18 +39,14 @@ class ModelInpaint():
         self.z_dim = 100
         self.n_size = args.n_size
         self.per_iter_step = args.per_iter_step
+        self.prior_likelihood = args.prior_likelihood
 
         self.generator = torch.load( args.generator )
         self.generator.eval()
-        
         self.discriminator = torch.load( args.discriminator )
         self.discriminator.eval()
-        
-        if not cuda:
-          self.generator.cpu()
-          self.discriminator.cpu()
 
-    def create_weight_mask( self, unweighted_masks ):
+    def create_weight_mask_hole( self, unweighted_masks, decay_index=0 ):
         kernel = np.ones( ( self.n_size, self.n_size ),
                           dtype=np.float32 )
         kernel = kernel / np.sum( kernel )
@@ -79,38 +73,43 @@ class ModelInpaint():
         processed = torch.tensor( processed ).permute( 0, 3, 2, 1 )
         return ( processed * 2.0 - 1.0 ).cuda()
 
-    def inpaint( self, corrupted, masks ):
+    def inpaint( self, corrupted, masks, decay_index=0 ):
         z = torch.tensor( np.float32( np.random.randn( self.batch_size,
                                                        self.z_dim ) ) )
-        weight_mask = self.create_weight_mask( masks )
+        weight_mask = self.create_weight_mask_hole( masks,
+                                                         decay_index=decay_index )
         if cuda:
             z = z.cuda()
             corrupted = corrupted.cuda()
             weight_mask = weight_mask.cuda()
+        optimizer = optim.Adam( [ z.requires_grad_() ] )
+        #optimizer = optim.SGD( [ z.requires_grad_() ], lr=5.0 )
         print( 'Before optimizing: ' )
         print( z )
-        # TODO: Your implementation here
-        context_loss = ContextLoss()
-        prior_loss = PriorLoss(self.discriminator)
-        optimizer = torch.optim.Adam([z.requires_grad_()], lr= 0.001)
-        lam = 10 # 1
-
-        for i in range(self.per_iter_step):
+        for i in range( self.per_iter_step ):
+            l1_loss = nn.MSELoss()#nn.L1Loss()
             def closure():
-                optimizer.zero_grad() 
-                generated = self.generator(z)
-                l_c = context_loss(generated, corrupted, weight_mask)
-                l_p = prior_loss(generated)
-                loss = lam * l_c + l_p
-                if i % 100 == 0:
-                    print( 'Iteration %d:' % i )
-                    print( 'Context loss: %.2f' % l_c )
-                    print( 'Prior loss: %.2f' % l_p)
-                    print( 'Total loss: %.2f' % loss)
-                loss.backward()
+                optimizer.zero_grad()
+                generated = self.generator( z )
+                context_loss = ContextLoss( generated )( corrupted, weight_mask )
+                if self.prior_likelihood:
+                    prior_loss = PriorLoss()( z )
+                    loss = context_loss + 0.003 * prior_loss
+                else:
+                    valid = Variable( Tensor( self.batch_size, 1 ).fill_( 1.0 ),
+                                      requires_grad=False )
+                    prior_loss = nn.BCELoss()( self.discriminator( generated ),
+                                               valid )
+                    loss = 10.0 * context_loss + 1.0 * prior_loss
+                print( 'Iteration %d:' % i )
+                print( 'Context loss: %.2f' % torch.mean( context_loss ) )
+                print( 'Prior loss: %.2f' % torch.mean( prior_loss ) )
+                loss.backward()# retain_graph=True )
                 return loss
-            optimizer.step(closure)
+            optimizer.step( closure )
+            # z = torch.clamp( z, -1.0, 1.0 )
         print( 'After optimizing: ' )
         print( z )
         generated = self.generator( z )
         return generated, self.postprocess( corrupted, masks, generated )
+ 

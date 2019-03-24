@@ -46,6 +46,10 @@ def parse_args():
                          type=str,
                          default='/home/csa102/gruvi/celebA/mask.csv',
                          help='path to the masked csv file' )
+    parser.add_argument( '--test_csv',
+                         type=str,
+                         default='/home/csa102/gruvi/celebA/test.csv',
+                         help='path to the test csv file' )
     parser.add_argument( '--mask_root',
                          type=str,
                          default='/home/csa102/gruvi/celebA',
@@ -72,6 +76,35 @@ def saveimages( corrupted, completed, blended, index ):
                 nrow=corrupted.shape[ 0 ] // 5,
                 normalize=True )
 
+def test():
+    args = parse_args()
+    m = ModelInpaint( args )
+
+    img_name = 'selfie.jpg'
+    mask_name = '/home/csa102/gruvi/celebA/mask/180000_mask.npy'
+    img_path = os.path.join(img_name)
+    mask_path = os.path.join(mask_name)
+
+    transform = transforms.Compose( [
+            transforms.Resize( args.imgSize ),
+            transforms.ToTensor(),
+            transforms.Normalize( ( 0.5, 0.5, 0.5 ), ( 0.5, 0.5, 0.5 ) )
+            ] ) 
+
+    image = Image.open(img_path)
+    image = transform(image)
+
+    mask = np.load(mask_path)
+    mask = mask[ 0 :: 2, 0 :: 2 ]
+    mask = np.stack((mask,) * 3, axis=1 )
+
+    corrupted = imgs * torch.tensor(mask)
+    completed, blended = m.inpaint(corrupted, mask)
+    
+    save_image( corrupted, 'completion/selfie_corrupted.png',)
+    save_image( completed, 'completion/selfie_completed.png',)
+    save_image( blended, 'completion/selfie_blended.png',)
+
 def main():
     args = parse_args()
     # Configure data loader
@@ -92,6 +125,7 @@ def main():
         completed, blended = m.inpaint( corrupted, masks )
         saveimages( corrupted, completed, blended, i )
         corrupted = blended
+
 
 if __name__ == '__main__':
     main()
