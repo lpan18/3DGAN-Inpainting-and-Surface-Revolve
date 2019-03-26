@@ -7,6 +7,8 @@ import torch
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import struct
 from skimage.transform import resize
@@ -29,10 +31,8 @@ def create_voxels(image):
 def plot_voxels(voxels, label):
     fig = plt.figure()
     ax = fig.gca( projection='3d' )
-    ax.view_init(60, 310)
-    ax.set_xlim(0, 30)
-    ax.set_ylim(0, 30)
-    ax.set_zlim(0, 30)
+    ax.view_init(60, 320)
+    ax.set_aspect(0.7)
     voxels = (voxels[0].squeeze().permute(1,2,0).numpy() > 0.5)
     ax.voxels(voxels,edgecolor='k')
     # plt.show()

@@ -14,6 +14,7 @@ import torch
 import pdb
 
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -24,7 +25,7 @@ parser.add_argument( '--n_epochs',
                      help='number of epochs of training' )
 parser.add_argument( '--batch_size',
                      type=int,
-                     default=4,#32,
+                     default=32,
                      help='size of the batches' )
 parser.add_argument( '--lr',
                      type=float,
@@ -125,12 +126,15 @@ def normal_init( m, mean, std ):
         m.bias.data.zero_()
 
 def save_image( voxels, batches_done ):
+    n = 3
     idx = 1
     fig = plt.figure()
-    for _ in range(2):
-        for _ in range(2):
-            ax = fig.add_subplot(2, 2, idx, projection='3d')
-            obj = (voxels[idx-1].squeeze().permute(1,2,0).cpu().numpy() > 0.5)
+    for _ in range(n):
+        for _ in range(n):
+            ax = fig.add_subplot(n, n, idx, projection='3d')
+            ax.view_init(60, 320)
+            ax.set_aspect(0.7)
+            obj = (voxels[idx-1].squeeze().permute(1,2,0).numpy() > 0.5)
             ax.voxels(obj, edgecolor='k')
             idx += 1
     fig.savefig( 'images/%d.png' % batches_done )
@@ -226,7 +230,7 @@ def main():
                       g_loss.item() ) )
             batches_done = epoch * len( dataloader ) + i
             if batches_done % opt.sample_interval == 0:
-                save_image( gen_imgs.detach(), batches_done )
+                save_image( gen_imgs.cpu().detach(), batches_done )
                 torch.save( generator, 'models/gen_%d.pt' % batches_done )
                 torch.save( discriminator, 'models/dis_%d.pt' % batches_done )
 if __name__ == '__main__':
