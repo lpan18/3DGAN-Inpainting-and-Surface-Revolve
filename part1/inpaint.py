@@ -11,6 +11,7 @@ from glob import glob
 import pdb
 from model import ModelInpaint
 from dcgan import Generator, Discriminator
+import random
 
 import matplotlib
 matplotlib.use('Agg')
@@ -22,11 +23,12 @@ def parse_args():
     parser.add_argument( '--generator',
                          type=str,
                          help='Pretrained generator',
-                         default='/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/gen_9600.pt' )
+                         default='models/gen_28000.pt' )
     parser.add_argument( '--discriminator',
                          type=str,
                          help='Pretrained discriminator',
-                         default='/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/dis_9600.pt' )
+                        #  default='/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/dis_9600.pt' )
+                         default='models/dis_28000.pt' )    
     parser.add_argument( '--imgSize',
                          type=int,
                          default=64 )
@@ -41,15 +43,10 @@ def parse_args():
                          action='store_true',
                          default=True,
                          help="Blend predicted image to original image" )
-    # These files are already on the VC server. Not sure if students have access to them yet.
     parser.add_argument( '--mask_csv',
                          type=str,
                          default='/home/csa102/gruvi/celebA/mask.csv',
                          help='path to the masked csv file' )
-    parser.add_argument( '--test_csv',
-                         type=str,
-                         default='/home/csa102/gruvi/celebA/test.csv',
-                         help='path to the test csv file' )
     parser.add_argument( '--mask_root',
                          type=str,
                          default='/home/csa102/gruvi/celebA',
@@ -58,6 +55,11 @@ def parse_args():
                          type=int,
                          default=1500,
                          help='number of steps per iteration' )
+    parser.add_argument('--test',
+                        type=bool,
+                        default=True,
+                        help='test mode')
+
     args = parser.parse_args()
     return args
 
@@ -76,37 +78,35 @@ def saveimages( corrupted, completed, blended, index ):
                 nrow=corrupted.shape[ 0 ] // 5,
                 normalize=True )
 
+def generate_mask(self, imgSize):
+    mask = torch.ones(1,imgSize,imgSize)
+    _, mask_h, mask_w = mask.shape
+    masks = []
+    hole_w, hole_h = 15, 15
+    offset_x = random.randint(1, mask_w - hole_w - 1) 
+    offset_y = random.randint(1, mask_h - hole_h - 1)
+    mask[:, offset_y : offset_y + hole_h, offset_x : offset_x + hole_w] = 0
+    return mask
+
 def test():
-    args = parse_args()
-    m = ModelInpaint( args )
-
     img_name = 'selfie.jpg'
-    mask_name = '/home/csa102/gruvi/celebA/mask/180000_mask.npy'
     img_path = os.path.join(img_name)
-    mask_path = os.path.join(mask_name)
-
+    image = Image.open(img_path)
+    
     transform = transforms.Compose( [
-            transforms.Resize( args.imgSize ),
+            transforms.Resize((args.imgSize, args.imgSize)),
             transforms.ToTensor(),
             transforms.Normalize( ( 0.5, 0.5, 0.5 ), ( 0.5, 0.5, 0.5 ) )
             ] ) 
 
-    image = Image.open(img_path)
     image = transform(image)
-
-    mask = np.load(mask_path)
-    mask = mask[ 0 :: 2, 0 :: 2 ]
+    mask = generate_mask(image, args.imgSize)
     mask = np.stack((mask,) * 3, axis=1 )
-
-    corrupted = imgs * torch.tensor(mask)
-    completed, blended = m.inpaint(corrupted, mask)
-    
-    save_image( corrupted, 'completion/selfie_corrupted.png',)
-    save_image( completed, 'completion/selfie_completed.png',)
-    save_image( blended, 'completion/selfie_blended.png',)
+    corrupted = image * torch.tensor(mask)
+    completed, blended = m.inpaint(corrupted, mask, test = True)    
+    saveimages(corrupted, completed, blended, 1000000)
 
 def main():
-    args = parse_args()
     # Configure data loader
     celebA_dataset = MaskFaceDataset( args.mask_csv,
                                       args.mask_root,
@@ -118,7 +118,6 @@ def main():
     dataloader = torch.utils.data.DataLoader( celebA_dataset,
                                               batch_size=args.batch_size,
                                               shuffle=False )
-    m = ModelInpaint( args )
     for i, ( imgs, masks ) in enumerate( dataloader ):
         masks = np.stack( ( masks, ) * 3, axis=1 )
         corrupted = imgs * torch.tensor( masks )
@@ -128,4 +127,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    m = ModelInpaint(args)
+    if not args.test:
+        main()
+    else:
+        test()

@@ -27,11 +27,12 @@ class PriorLoss(nn.Module):
     def __init__(self, discriminator, lam=1):
         super(PriorLoss, self).__init__()
         self.discriminator = discriminator
+        self.lam = lam
 
     def forward(self, generated):
         validity = self.discriminator(generated)
         ones = torch.ones_like(validity)
-        l_p = torch.log(ones-validity)
+        l_p = self.lam * torch.log(ones - validity)
         l_p = torch.mean(l_p)
         return l_p
 
@@ -79,7 +80,9 @@ class ModelInpaint():
         processed = torch.tensor( processed ).permute( 0, 3, 2, 1 )
         return ( processed * 2.0 - 1.0 ).cuda()
 
-    def inpaint( self, corrupted, masks ):
+    def inpaint( self, corrupted, masks, test = False ):
+        if test:
+            self.batch_size = 1
         z = torch.tensor( np.float32( np.random.randn( self.batch_size,
                                                        self.z_dim ) ) )
         weight_mask = self.create_weight_mask( masks )
@@ -93,7 +96,6 @@ class ModelInpaint():
         context_loss = ContextLoss()
         prior_loss = PriorLoss(self.discriminator)
         optimizer = torch.optim.Adam([z.requires_grad_()], lr= 0.001)
-        lam = 10 # 1
 
         for i in range(self.per_iter_step):
             def closure():
@@ -101,7 +103,7 @@ class ModelInpaint():
                 generated = self.generator(z)
                 l_c = context_loss(generated, corrupted, weight_mask)
                 l_p = prior_loss(generated)
-                loss = lam * l_c + l_p
+                loss = l_c + l_p
                 if i % 100 == 0:
                     print( 'Iteration %d:' % i )
                     print( 'Context loss: %.2f' % l_c )
