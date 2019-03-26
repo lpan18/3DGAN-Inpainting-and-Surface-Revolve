@@ -125,7 +125,7 @@ def normal_init( m, mean, std ):
         m.weight.data.normal_( mean, std )
         m.bias.data.zero_()
 
-def save_image( voxels, batches_done ):
+def save_image(voxels, text):
     n = 3
     idx = 1
     fig = plt.figure()
@@ -137,7 +137,7 @@ def save_image( voxels, batches_done ):
             obj = (voxels[idx-1].squeeze().permute(1,2,0).numpy() > 0.5)
             ax.voxels(obj, edgecolor='k')
             idx += 1
-    fig.savefig( 'images/%d.png' % batches_done )
+    fig.savefig('completion/' + text + '.png')
     plt.close()
 
 def main():
@@ -230,7 +230,7 @@ def main():
                       g_loss.item() ) )
             batches_done = epoch * len( dataloader ) + i
             if batches_done % opt.sample_interval == 0:
-                save_image( gen_imgs.cpu().detach(), batches_done )
+                save_image( gen_imgs.cpu().detach(), str(batches_done) )
                 torch.save( generator, 'models/gen_%d.pt' % batches_done )
                 torch.save( discriminator, 'models/dis_%d.pt' % batches_done )
 if __name__ == '__main__':

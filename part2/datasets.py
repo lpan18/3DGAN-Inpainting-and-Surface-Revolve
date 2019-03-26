@@ -16,6 +16,8 @@ from skimage.transform import resize
 from mpl_toolkits.mplot3d import Axes3D
 
 def read_mnist_2d(filename):
+    # Reference: 
+    # https://gist.github.com/tylerneylon/ce60e8a06e7506ac45788443f7269e40
     with open(filename, 'rb') as f:
         _, _, dims = struct.unpack('>HBB', f.read(4))
         shape = tuple(struct.unpack('>I', f.read(4))[0] for i in range(dims))
