@@ -1,9 +1,10 @@
 __pycache__/
 data/
 images/
-outputs/
-results/
+models/
+completion/
 .vs/
+.vscode/
 *.asv
 *.mat
 *.png
@@ -12,3 +13,4 @@ results/
 *.pdf
 *.docx
 *.txt
+other/

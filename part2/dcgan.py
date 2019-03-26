@@ -5,7 +5,6 @@ import argparse
 import os
 import numpy as np
 import torchvision.transforms as transforms
-from torchvision.utils import save_image
 from torch.utils.data import DataLoader
 from datasets import MNIST3DDataset
 from torch.autograd import Variable
@@ -14,6 +13,10 @@ import torch.nn as nn
 import torch
 import pdb
 
+import matplotlib
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
 parser = argparse.ArgumentParser()
 parser.add_argument( '--n_epochs',
                      type=int,
@@ -21,7 +24,7 @@ parser.add_argument( '--n_epochs',
                      help='number of epochs of training' )
 parser.add_argument( '--batch_size',
                      type=int,
-                     default=4,#128,
+                     default=4,#32,
                      help='size of the batches' )
 parser.add_argument( '--lr',
                      type=float,
@@ -43,10 +46,10 @@ parser.add_argument( '--latent_dim',
                      type=int,
                      default=100,
                      help='dimensionality of the latent space' )
-parser.add_argument( '--img_size',
+parser.add_argument( '--obj_size',
                      type=int,
-                     default=28,
-                     help='size of each image dimension' )
+                     default=32,
+                     help='size of each dimension' )
 parser.add_argument( '--channels',
                      type=int,
                      default=1,
@@ -66,17 +69,15 @@ parser.add_argument( '--train_labels',
 opt = parser.parse_args()
 
 class Generator( nn.Module ):
-    def __init__( self, d=128, outC=1 ):
+    def __init__( self, d=128 ):
         super( Generator, self ).__init__()
-        self.deconv1 = nn.ConvTranspose3d( opt.latent_dim, d * 8, 4, 1, 0 )
-        self.deconv1_bn = nn.BatchNorm3d( d * 8 )
-        self.deconv2 = nn.ConvTranspose3d( d * 8, d * 4, 4, 2, 1 )
-        self.deconv2_bn = nn.BatchNorm3d( d * 4 )
-        self.deconv3 = nn.ConvTranspose3d( d * 4, d * 2, 4, 2, 1 )
-        self.deconv3_bn = nn.BatchNorm3d( d * 2 )
-        self.deconv4 = nn.ConvTranspose3d( d * 2, d, 4, 2, 1 )
-        self.deconv4_bn = nn.BatchNorm3d( d )
-        self.deconv5 = nn.ConvTranspose3d( d, outC, 4, 2, 1 )
+        self.deconv1 = nn.ConvTranspose3d( opt.latent_dim, d * 4, 4, 1, 0 )
+        self.deconv1_bn = nn.BatchNorm3d( d * 4 )
+        self.deconv2 = nn.ConvTranspose3d( d * 4, d * 2, 4, 2, 1 )
+        self.deconv2_bn = nn.BatchNorm3d( d * 2 )
+        self.deconv3 = nn.ConvTranspose3d( d * 2, d, 4, 2, 1 )
+        self.deconv3_bn = nn.BatchNorm3d( d )
+        self.deconv4 = nn.ConvTranspose3d( d, 1, 4, 2, 1 )
 
     # weight_init
     def weight_init( self, mean, std ):
@@ -85,28 +86,23 @@ class Generator( nn.Module ):
 
     # forward method
     def forward( self, input ):
-        # x = F.relu(self.deconv1(input))
-        x = input.view( -1, 100, 1, 1, 1)   
-        print("in gen", x.shape)    
+        x = input.view( -1, opt.latent_dim, 1, 1, 1 )
         x = F.relu( self.deconv1_bn( self.deconv1( x ) ) )
         x = F.relu( self.deconv2_bn( self.deconv2( x ) ) )
         x = F.relu( self.deconv3_bn( self.deconv3( x ) ) )
-        x = F.relu( self.deconv4_bn( self.deconv4( x ) ) )
-        x = F.tanh( self.deconv5( x ) )
+        x = torch.sigmoid( self.deconv4( x ) )
         return x
 
 class Discriminator( nn.Module ):
     # initializers
-    def __init__( self, d=128, inC=1 ):
+    def __init__( self, d=128 ):
         super( Discriminator, self ).__init__()
-        self.conv1 = nn.Conv3d( inC, d, 4, 2, 1 )
+        self.conv1 = nn.Conv3d( 1, d, 4, 2, 1 )
         self.conv2 = nn.Conv3d( d, d * 2, 4, 2, 1 )
         self.conv2_bn = nn.BatchNorm3d( d * 2 )
         self.conv3 = nn.Conv3d( d * 2, d * 4, 4, 2, 1)
         self.conv3_bn = nn.BatchNorm3d( d * 4 )
-        self.conv4 = nn.Conv3d( d * 4, d * 8, 4, 2, 1 )
-        self.conv4_bn = nn.BatchNorm3d( d * 8 )
-        self.conv5 = nn.Conv3d( d * 8, 1, 4, 1, 0)
+        self.conv4 = nn.Conv3d( d * 4, 1, 4, 1, 0 )
 
     # weight_init
     def weight_init( self, mean, std ):
@@ -115,19 +111,30 @@ class Discriminator( nn.Module ):
 
     # forward method
     def forward( self, input ):
-        print("in disc", input.shape)     
-        x = F.leaky_relu( self.conv1( input ), 0.2 )
+        x = input.view( -1, 1, opt.obj_size, opt.obj_size, opt.obj_size )
+        x = F.leaky_relu( self.conv1( x ), 0.2 )
         x = F.leaky_relu( self.conv2_bn( self.conv2( x ) ), 0.2 )
         x = F.leaky_relu( self.conv3_bn( self.conv3( x ) ), 0.2 )
-        x = F.leaky_relu( self.conv4_bn( self.conv4( x ) ), 0.2 )
-        print("x", x.shape)
-        x = F.sigmoid( self.conv5( x ) )
+        x = torch.sigmoid( self.conv4( x ) )
+        x = x.view( -1, 1 )
         return x
 
 def normal_init( m, mean, std ):
     if isinstance( m, nn.ConvTranspose3d ) or isinstance( m, nn.Conv3d ):
         m.weight.data.normal_( mean, std )
         m.bias.data.zero_()
+
+def save_image( voxels, batches_done ):
+    idx = 1
+    fig = plt.figure()
+    for _ in range(2):
+        for _ in range(2):
+            ax = fig.add_subplot(2, 2, idx, projection='3d')
+            obj = (voxels[idx-1].squeeze().permute(1,2,0).cpu().numpy() > 0.5)
+            ax.voxels(obj, edgecolor='k')
+            idx += 1
+    fig.savefig( 'images/%d.png' % batches_done )
+    plt.close()
 
 def main():
     cuda = True if torch.cuda.is_available() else False
@@ -219,10 +226,7 @@ def main():
                       g_loss.item() ) )
             batches_done = epoch * len( dataloader ) + i
             if batches_done % opt.sample_interval == 0:
-                save_image( gen_imgs.data[ : 25 ],
-                            'images/%d.png' % batches_done,
-                            nrow=5,
-                            normalize=True )
+                save_image( gen_imgs.detach(), batches_done )
                 torch.save( generator, 'models/gen_%d.pt' % batches_done )
                 torch.save( discriminator, 'models/dis_%d.pt' % batches_done )
 if __name__ == '__main__':
