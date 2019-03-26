@@ -12,7 +12,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import struct
 from skimage.transform import resize
-
 from mpl_toolkits.mplot3d import Axes3D
 
 def read_mnist_2d(filename):
@@ -26,15 +25,16 @@ def read_mnist_2d(filename):
         return result
 
 def create_voxels(image):
-    depth = image.shape[0]
-    voxels = np.array([image for _ in range(depth)])
+    depth = 10
+    voxels = np.zeros((image.shape[0],image.shape[0],image.shape[0]))
+    for idx in range(depth):
+        voxels[10+idx] = image
     return voxels
 
 def plot_voxels(voxels, label):
     fig = plt.figure()
     ax = fig.gca( projection='3d' )
-    ax.view_init(60, 320)
-    ax.set_aspect(0.7)
+    ax.view_init(60, 300)
     voxels = (voxels[0].squeeze().permute(1,2,0).numpy() > 0.5)
     ax.voxels(voxels,edgecolor='k')
     # plt.show()

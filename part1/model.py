@@ -80,11 +80,10 @@ class ModelInpaint():
         processed = torch.tensor( processed ).permute( 0, 3, 2, 1 )
         return ( processed * 2.0 - 1.0 ).cuda()
 
-    def inpaint( self, corrupted, masks, test = False ):
+    def inpaint( self, corrupted, masks, test=False ):
         if test:
             self.batch_size = 1
-        z = torch.tensor( np.float32( np.random.randn( self.batch_size,
-                                                       self.z_dim ) ) )
+        z = torch.tensor( np.float32( np.random.randn( self.batch_size, self.z_dim ) ) )
         weight_mask = self.create_weight_mask( masks )
         if cuda:
             z = z.cuda()
@@ -98,20 +97,18 @@ class ModelInpaint():
         optimizer = torch.optim.Adam([z.requires_grad_()], lr= 0.001)
 
         for i in range(self.per_iter_step):
-            def closure():
-                optimizer.zero_grad() 
-                generated = self.generator(z)
-                l_c = context_loss(generated, corrupted, weight_mask)
-                l_p = prior_loss(generated)
-                loss = l_c + l_p
-                if i % 100 == 0:
-                    print( 'Iteration %d:' % i )
-                    print( 'Context loss: %.2f' % l_c )
-                    print( 'Prior loss: %.2f' % l_p)
-                    print( 'Total loss: %.2f' % loss)
-                loss.backward()
-                return loss
-            optimizer.step(closure)
+            generated = self.generator(z)
+            l_c = context_loss(generated, corrupted, weight_mask)
+            l_p = prior_loss(generated)
+            loss = l_c + l_p
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if i % 100 == 0:
+                print( 'Iteration %d:' % i )
+                print( 'Context loss: %.2f' % l_c )
+                print( 'Prior loss: %.2f' % l_p)
+                print( 'Total loss: %.2f' % loss)
         print( 'After optimizing: ' )
         print( z )
         generated = self.generator( z )

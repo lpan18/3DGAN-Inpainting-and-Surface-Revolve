@@ -57,7 +57,7 @@ def parse_args():
                          help='number of steps per iteration' )
     parser.add_argument('--test',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='test mode')
 
     args = parser.parse_args()
