@@ -25,23 +25,22 @@ def read_mnist_2d(filename):
         return result
 
 def create_voxels(image):
-    depth = 10
+    depth = 15
     voxels = np.zeros((image.shape[0],image.shape[0],image.shape[0]))
     for idx in range(depth):
-        voxels[10+idx] = image
+        voxels[:,:,5+idx] = image
     return voxels
 
 def plot_voxels(voxels, label):
     fig = plt.figure()
     ax = fig.gca( projection='3d' )
     ax.view_init(60, 300)
-    voxels = (voxels[0].squeeze().permute(1,2,0).numpy() > 0.5)
+    voxels = (voxels[0,0] > 0.5)
     ax.voxels(voxels,edgecolor='k')
     # plt.show()
-    fig.savefig( 'images/%s.png' % label[0].numpy() )
+    fig.savefig( 'test_dataloader_%s.png' % label[0].numpy() )
     plt.close()
-
-
+        
 class MNIST3DDataset(Dataset):
     def __init__(self, imgs_path, labels_path):
         self.images = read_mnist_2d(os.path.join(imgs_path))
@@ -67,6 +66,8 @@ if __name__ == '__main__':
     imgs_path = 'data/train-images.idx3-ubyte'
     labels_path = 'data/train-labels.idx1-ubyte'
     dataset = MNIST3DDataset(imgs_path, labels_path)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=False)
-    i, (image, label) = next(enumerate(dataloader))
-    plot_voxels(image, label)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False)
+    for i, (image, label) in enumerate(dataloader):
+        plot_voxels(image.detach().cpu().numpy(), label)
+        if(i==5):
+            break

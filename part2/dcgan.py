@@ -14,7 +14,7 @@ import torch
 import pdb
 
 import matplotlib
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -57,7 +57,7 @@ parser.add_argument( '--channels',
                      help='number of image channels' )
 parser.add_argument( '--sample_interval',
                      type=int,
-                     default=2000,#400,
+                     default=400,
                      help='interval between image sampling' )
 parser.add_argument( '--train_images',
                      type=str,
@@ -70,7 +70,7 @@ parser.add_argument( '--train_labels',
 opt = parser.parse_args()
 
 class Generator( nn.Module ):
-    def __init__( self, d=128 ):
+    def __init__( self, d=64 ):
         super( Generator, self ).__init__()
         self.deconv1 = nn.ConvTranspose3d( opt.latent_dim, d * 4, 4, 1, 0 )
         self.deconv1_bn = nn.BatchNorm3d( d * 4 )
@@ -91,12 +91,12 @@ class Generator( nn.Module ):
         x = F.relu( self.deconv1_bn( self.deconv1( x ) ) )
         x = F.relu( self.deconv2_bn( self.deconv2( x ) ) )
         x = F.relu( self.deconv3_bn( self.deconv3( x ) ) )
-        x = torch.sigmoid( self.deconv4( x ) )
+        x = torch.tanh( self.deconv4( x ) )
         return x
 
 class Discriminator( nn.Module ):
     # initializers
-    def __init__( self, d=128 ):
+    def __init__( self, d=64 ):
         super( Discriminator, self ).__init__()
         self.conv1 = nn.Conv3d( 1, d, 4, 2, 1 )
         self.conv2 = nn.Conv3d( d, d * 2, 4, 2, 1 )
@@ -117,7 +117,6 @@ class Discriminator( nn.Module ):
         x = F.leaky_relu( self.conv2_bn( self.conv2( x ) ), 0.2 )
         x = F.leaky_relu( self.conv3_bn( self.conv3( x ) ), 0.2 )
         x = torch.sigmoid( self.conv4( x ) )
-        x = x.view( -1, 1 )
         return x
 
 def normal_init( m, mean, std ):
@@ -126,19 +125,15 @@ def normal_init( m, mean, std ):
         m.bias.data.zero_()
 
 def save_image(voxels, text):
-    n = 3
-    idx = 1
-    fig = plt.figure()
-    for _ in range(n):
-        for _ in range(n):
-            ax = fig.add_subplot(n, n, idx, projection='3d')
-            ax.view_init(60, 320)
-            ax.set_aspect(0.7)
-            obj = (voxels[idx-1].squeeze().permute(1,2,0).numpy() > 0.5)
-            ax.voxels(obj, edgecolor='k')
-            idx += 1
-    fig.savefig('completion/' + text + '.png')
-    plt.close()
+    for i in range(5):
+        fig = plt.figure()
+        ax = fig.gca( projection='3d' )
+        ax.view_init(60, 300)
+        ax.set_aspect(0.7)
+        obj = (voxels[i,0] > 0.5)
+        ax.voxels(obj, edgecolor='k')
+        fig.savefig('images/' + text + '_' + str(i) + '.png')
+        plt.close()
 
 def main():
     cuda = True if torch.cuda.is_available() else False
@@ -159,7 +154,8 @@ def main():
     MNIST_3D_dataset = MNIST3DDataset( opt.train_images, opt.train_labels)
     dataloader = torch.utils.data.DataLoader( MNIST_3D_dataset,
                                               batch_size=opt.batch_size,
-                                              shuffle=True )
+                                              shuffle=True, 
+                                              num_workers=6 )
     # Optimizers
     optimizer_G = torch.optim.Adam( generator.parameters(),
                                     lr=opt.lr,
@@ -200,7 +196,6 @@ def main():
                                                             opt.latent_dim ) ) ) )
             # Generate a batch of images
             gen_imgs = generator( z ) 
-
             # Loss measures generator's ability to fool the discriminator
             g_loss = adversarial_loss( discriminator( gen_imgs ), valid )
             g_loss.backward()
@@ -230,7 +225,7 @@ def main():
                       g_loss.item() ) )
             batches_done = epoch * len( dataloader ) + i
             if batches_done % opt.sample_interval == 0:
-                save_image( gen_imgs.cpu().detach(), str(batches_done) )
+                save_image( gen_imgs.detach().cpu().numpy(), str(batches_done) )
                 torch.save( generator, 'models/gen_%d.pt' % batches_done )
                 torch.save( discriminator, 'models/dis_%d.pt' % batches_done )
 if __name__ == '__main__':
