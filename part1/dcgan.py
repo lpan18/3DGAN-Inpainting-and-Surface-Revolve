@@ -53,7 +53,7 @@ parser.add_argument( '--channels',
                      help='number of image channels' )
 parser.add_argument( '--sample_interval',
                      type=int,
-                     default=2000,#400,
+                     default=400,
                      help='interval between image sampling' )
 # These files are already on the VC server. Not sure if students have access to them yet.
 parser.add_argument( '--train_csv',
@@ -152,7 +152,8 @@ def main():
                                                  ( 0.5, 0.5, 0.5 ) ) ] ) )
     dataloader = torch.utils.data.DataLoader( celebA_dataset,
                                               batch_size=opt.batch_size,
-                                              shuffle=True )
+                                              shuffle=True,
+                                              num_workers=6 )
     # Optimizers
     optimizer_G = torch.optim.Adam( generator.parameters(),
                                     lr=opt.lr,

@@ -24,7 +24,7 @@ class ContextLoss( nn.Module ):
         return l_c
 
 class PriorLoss(nn.Module):
-    def __init__(self, discriminator, lam=1):
+    def __init__(self, discriminator, lam=0.003):
         super(PriorLoss, self).__init__()
         self.discriminator = discriminator
         self.lam = lam
@@ -94,7 +94,7 @@ class ModelInpaint():
         # TODO: Your implementation here
         context_loss = ContextLoss()
         prior_loss = PriorLoss(self.discriminator)
-        optimizer = torch.optim.Adam([z.requires_grad_()], lr= 0.001)
+        optimizer = torch.optim.Adam([z.requires_grad_()], lr= 0.0002)
 
         for i in range(self.per_iter_step):
             generated = self.generator(z)

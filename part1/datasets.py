@@ -33,24 +33,26 @@ class FaceDataset( Dataset ):
 
 class MaskFaceDataset( Dataset ):
     # https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
-    def __init__( self, csv_file, root_dir, transform=None ):
-        self.frame = pd.read_csv( csv_file )
+    def __init__( self, image_file, mask_file, root_dir, transform=None ):
+        self.image_file = pd.read_csv( image_file ) 
+        self.mask_file = pd.read_csv( mask_file )
         self.root_dir = root_dir
         self.transform = transform
     def __len__( self ):
-        return len( self.frame )
+        return len( self.image_file )
     def __getitem__( self, idx ):
-        img_name = os.path.join( self.root_dir, self.frame.iloc[ idx, 0 ] )
+        img_name = os.path.join( self.root_dir, self.image_file.iloc[ idx, 0 ] )
         image = Image.open( img_name )
         if self.transform:
             image = self.transform( image )
-        mask_name = os.path.join( self.root_dir, self.frame.iloc[ idx, 1 ] )
+        mask_name = os.path.join( self.root_dir, self.mask_file.iloc[ idx, 1 ] )
         mask = np.load( mask_name )
         mask = mask[ 0 :: 2, 0 :: 2 ]
         return ( image, mask )
 
 if __name__ == '__main__':
-    celebA_dataset = MaskFaceDataset('/home/csa102/gruvi/celebA/mask.csv',
+    celebA_dataset = MaskFaceDataset('/home/csa102/gruvi/celebA/test.csv',
+                                    '/home/csa102/gruvi/celebA/mask.csv',
                                     '/home/csa102/gruvi/celebA',
                                     transform=transforms.Compose( [
                                     transforms.Resize(64),

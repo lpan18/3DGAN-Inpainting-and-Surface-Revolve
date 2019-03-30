@@ -23,12 +23,12 @@ def parse_args():
     parser.add_argument( '--generator',
                          type=str,
                          help='Pretrained generator',
-                         default='models/gen_28000.pt' )
+                         default='models/gen_28000.pt') #'/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/gen_9600.pt' )
     parser.add_argument( '--discriminator',
                          type=str,
                          help='Pretrained discriminator',
-                        #  default='/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/dis_9600.pt' )
-                         default='models/dis_28000.pt' )    
+                         default= 'models/dis_28000.pt')
+                         
     parser.add_argument( '--imgSize',
                          type=int,
                          default=64 )
@@ -43,6 +43,10 @@ def parse_args():
                          action='store_true',
                          default=True,
                          help="Blend predicted image to original image" )
+    parser.add_argument( '--image_csv',
+                         type=str,
+                         default='/home/csa102/gruvi/celebA/test.csv',
+                         help='path to the masked csv file' )
     parser.add_argument( '--mask_csv',
                          type=str,
                          default='/home/csa102/gruvi/celebA/mask.csv',
@@ -108,7 +112,8 @@ def test():
 
 def main():
     # Configure data loader
-    celebA_dataset = MaskFaceDataset( args.mask_csv,
+    celebA_dataset = MaskFaceDataset( args.image_csv,
+                                      args.mask_csv,
                                       args.mask_root,
                                       transform=transforms.Compose( [
                            transforms.Resize( args.imgSize ),
@@ -117,14 +122,14 @@ def main():
                        ] ) )
     dataloader = torch.utils.data.DataLoader( celebA_dataset,
                                               batch_size=args.batch_size,
-                                              shuffle=False )
+                                              shuffle=False,
+                                              num_workers=6 )
     for i, ( imgs, masks ) in enumerate( dataloader ):
         masks = np.stack( ( masks, ) * 3, axis=1 )
         corrupted = imgs * torch.tensor( masks )
         completed, blended = m.inpaint( corrupted, masks )
         saveimages( corrupted, completed, blended, i )
         corrupted = blended
-
 
 if __name__ == '__main__':
     args = parse_args()
