@@ -13,6 +13,5 @@ for i=1:nrCPs
 end
 
 point = P(1,:,nrCPs);
-
 end
 
