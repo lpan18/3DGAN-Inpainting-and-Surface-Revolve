@@ -1,228 +1,126 @@
-import bpy
 import numpy as np
-import matplotlib.pyplot as plt
-import mathutils
-from mathutils import Vector
-import bmesh
-from bpy import context
-
-file_path="E:\\2019SpringTerm\VisualComputingII\Assignments\CMPT743-Assignment3\part3\controlpoints.txt"
-def readControlPts(file_path):
-    controlPts = []
-    for line in open(file_path,"r"):
-        values=line.split()
-        if not values:break
-        point = []
-        point.append(0)
-        point.append(values[1])
-        point.append(values[2])
-        controlPts.append(point)
-    return controlPts
+import math
+# import matplotlib.pyplot as plt
+import bpy
 
 def deCasteljau(cPoly, t):
     nrCPs = len(cPoly)
+    P = np.zeros((nrCPs, 2, 4))
     P[:,:,0] = cPoly
     for i in range(nrCPs):
-        for j in range(nrCPs-i):
+        for j in range(nrCPs-i-1):
+            # print(i,j)
             P[j,:,i+1] = (1-t)*P[j,:,i] + t*P[j+1,:,i]
     return P[0,:,nrCPs-1]
 
+def makeFaces(verts,num_u):
+    faces=[]
+    i = 0
+    while(i < len(verts)):     
+        if((i+1) % num_u == 0): 
+            faces.append((i,i+1-num_u,i+1,i+num_u))
+        else:
+            faces.append((i,i+1,i+1+num_u,i+num_u))
+        i += 1
+    return faces
+
 def main():
-    cPoly = readControlPts(file_path)
+    # Init control polygon
+    cPoly = np.loadtxt('/home/lpa25/Documents/CMPT743-a3/part3/controlpoints.txt', delimiter=' ')
     stepSize = 0.01
-    num_c = round(1/stepSize)+1
-    c = np.zeros(num_c, 2)
-    for i in range(0, 1, stepSize):
-        c[round(i*(1/stepSize))+1,:] = deCasteljau(cPoly, i)
-    plt.plot(cPoly[:,1], cPoly[:,2],'b-s', linewidth=2, markersize=12)
-    # plot(c(:,1),c(:,2),'r','LineWidth',2)
+    num_c = int(1/stepSize)+1
+    c = np.zeros((num_c, 2))
+
+    # Iterate over curve
+    idx = 0
+    for i in np.arange(0,1+stepSize,stepSize):
+        c[idx,:] = deCasteljau(cPoly, i)
+        idx += 1
+    # plt.plot(cPoly[:,0], cPoly[:,1],'b-s')
+    # plt.plot(c[:,0],c[:,1],'r-')
+    # plt.show()
+
+    # Generate u
+    PI = math.pi
+    step_u = PI/30
+    num_u = int(2*PI/step_u)+1
+    
+    # Revolving the curve around Z axis
+    verts1=[]  
+
+    for i in range(num_c):
+        for u in np.arange(0,2*PI+step_u,step_u):
+            verts1.append((c[i,0]*np.cos(u),c[i,0]*np.sin(u),c[i,1]))
+            
+    faces1 = makeFaces(verts1, num_u)      
+
+    # Revolving the curve along the start-end line
+    # calculate rotation angle from start-end axis to z-axis
+    dy = c[0,0]-c[num_c-1,0]
+    dz = c[0,1]-c[num_c-1,1]
+    sin_theta = dy/math.sqrt(dy*dy + dz*dz)
+    cos_theta = dz/math.sqrt(dy*dy + dz*dz)
+
+    # Compute transformation matrix
+    temp1 = np.zeros((num_c,1))
+    temp2 = np.ones((num_c,1))
+    concated_c = np.concatenate((temp1,c,temp2),axis=1)
+
+    rotate_mat = np.array([[1,    0,      0,    0],
+                        [0, cos_theta, -sin_theta, 0],
+                        [0, sin_theta, cos_theta,  0],
+                        [0,     0,      0,        1]])
+            
+    translate_mat = np.array([[1, 0, 0, -concated_c[0,0]],
+                            [0, 1, 0, -concated_c[0,1]],
+                            [0, 0, 1, -concated_c[0,2]],
+                            [0, 0, 0,  1]])
+                
+    tranform_mat = np.dot(rotate_mat, translate_mat)
+
+    # Transform all points
+    transformed_c =  np.dot(concated_c, np.transpose(tranform_mat))
+    # plt.plot(transformed_c[:,1],transformed_c[:,2],'b-s')
+    # plt.show()
+
+    # Revolving the curve around Z axis
+    temp_verts = np.zeros((num_c*num_u,4))
+    idx = 0
+    for i in range(num_c):
+        for u in np.arange(0,2*PI+step_u,step_u):
+            temp_verts[idx] = [transformed_c[i,1]*np.cos(u),transformed_c[i,1]*np.sin(u),transformed_c[i,2],1]
+            idx += 1
+
+    temp_verts = np.dot(temp_verts, np.transpose(np.linalg.inv(tranform_mat)))[:,0:3]
+    
+    verts2 = [tuple(row) for row in temp_verts]
+    faces2 = makeFaces(verts2, num_u)   
+
+    # Render mesh
+    # Curve
+    c = np.concatenate((temp1,c),axis=1)
+    verts0 = [tuple(row) for row in c]
+    edges0 = []
+    i = 0
+    while(i < len(verts0)-1):     
+        edges0.append((i,i+1))
+        i += 1
+    me0 = bpy.data.meshes.new('Curve' + 'Mesh')
+    ob0 = bpy.data.objects.new('Curve', me0)
+    bpy.context.scene.objects.link(ob0)
+    me0.from_pydata(verts0, edges0, [])
+
+    # Revolve along Z axis
+    me1 = bpy.data.meshes.new('Revolve-Z-axis' + 'Mesh')
+    ob1 = bpy.data.objects.new('Revolve-Z-axis', me1)
+    bpy.context.scene.objects.link(ob1)
+    me1.from_pydata(verts1, [], faces1)
+
+    # Revolve along start-end axis
+    me2 = bpy.data.meshes.new('Revolve-Start-End-axis' + 'Mesh')
+    ob2 = bpy.data.objects.new('Revolve-Start-End-axis', me2)
+    bpy.context.scene.objects.link(ob2)
+    me2.from_pydata(verts2, [], faces2)
 
 if __name__ == '__main__':
     main()
-
-# def triangulate_object(obj):
-#     me = obj.data
-#     # Get a BMesh representation
-#     bm = bmesh.new()
-#     bm.from_mesh(me)
-
-#     bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method=0, ngon_method=0)
-
-#     # Finish up, write the bmesh back to the mesh
-#     bm.to_mesh(me)
-#     bm.free()
-#     return me
-# def createMeshFromData(name, origin, verts, faces):
-#     # Create mesh and object
-#     me = bpy.data.meshes.new(name+'Mesh')
-#     ob = bpy.data.objects.new(name, me)
-#     ob.location = origin
-#     ob.show_name = True
- 
-#     # Link object to scene and make active
-#     scn = bpy.context.scene
-#     scn.objects.link(ob)
-#     scn.objects.active = ob
-#     ob.select = True
- 
-#     # Create mesh from given verts, faces.
-#     me.from_pydata(verts, [], faces)
-#     # Update mesh with new data
-#     me=triangulate_object(ob)
-#     me.update()    
-#     return ob
-
-
-
-
-# def readSplit(fileName):
-#     for line in open(fileName,"r"):
-#         if line.startswith('#'):continue
-#         values=line.split()
-#         if not values:continue
-#         if values[0]!='v':
-#             sp=int(values[0])
-#     return sp
-
-# def duplicate(vertices):
-#     verticesReturn=[] 
-#     vertices2=[]
-#     verticesReturn.extend(vertices)
-#     for vertex in vertices:
-#         vertex2=[]
-#         vertex2.append(vertex[0])
-#         vertex2.append(vertex[1])
-#         vertex2.append(vertex[2]+1.2)
-#         vertices2.append(vertex2)
-#     verticesReturn.extend(vertices2)
-#     return verticesReturn
-
-
-# def applyModifier (mod,objA, objB):
-#     target = objA 
-#     bpy.context.scene.objects.active = target
-#     boo = target.modifiers.new('Booh', 'BOOLEAN')
-#     boo.object = objB
-#     boo.operation = mod
-#     bpy.ops.object.modifier_apply(apply_as='DATA', modifier="Booh")
-#     bpy.context.scene.objects.unlink(objB)
-#     return target
-
-
-# def makeFaces(verts):
-#     faces=[]
-#     index=[]
-#     half=int(len(verts)/2)
-#     for i in range(half):
-#         index.append(i)
-#     faces.append(index)
-#     index=[]
-#     for i in range(half):
-#         index.append(i+half)
-#     faces.append(index)
-#     for i in range(half-1):
-#         index=[]
-#         index.append(i)
-#         index.append(i+1)
-#         index.append(i+1+half)
-#         index.append(i+half)
-#         faces.append(index)
-#     index=[]
-#     index.append(half-1)
-#     index.append(0)
-#     index.append(half)
-#     index.append(len(verts)-1)
-#     faces.append(index)
-#     return faces
-
-# def export_obj(filepath,obj):
-#     mesh = obj.data
-#     with open(filepath, 'w') as f:
-#         f.write("# OBJ file\n")
-#         for v in mesh.vertices:
-#             f.write("v %.4f %.4f %.4f\n" % v.co[:])
-#         for p in mesh.polygons:
-#             f.write("f")
-#             for i in p.vertices:
-#                 f.write(" %d" % (i + 1))
-#             f.write("\n")
-    
-# def male_connector(ob,loc):
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.503,location=(loc[0],loc[1],loc[2]+0.6),end_fill_type='TRIFAN',depth=1.2)
-#     objA=bpy.context.object
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.2,location=(loc[0],loc[1],loc[2]),end_fill_type='TRIFAN', depth=20)
-
-#     objB=bpy.context.object
-
-#     target=applyModifier ('DIFFERENCE',objA, objB)
-
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.6,location=(loc[0],loc[1],loc[2]+0.6),end_fill_type='TRIFAN',depth=0.6)
-#     objA=bpy.context.object
-
-#     target=applyModifier ('DIFFERENCE',target, objA)
-
-
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.2,location=(loc[0],loc[1],loc[2]), depth=20)
-
-#     objB=bpy.context.object
-#     target2=applyModifier ('DIFFERENCE',ob, objB)
-    
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.5,location=(loc[0],loc[1],loc[2]+0.6),end_fill_type='TRIFAN',depth=20)
-#     objA=bpy.context.object
-#     target3=applyModifier ('DIFFERENCE',target2, objA)
-
-#     finalResult=applyModifier ('UNION',target, target3)
-#     triangulate_object(finalResult)
-#     return finalResult
-
-
-# def female_connector(ob,loc):
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.5,location=(loc[0],loc[1],loc[2]+0.6),end_fill_type='TRIFAN',depth=0.6)
-#     objA=bpy.context.object
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.2,location=(loc[0],loc[1],loc[2]),end_fill_type='TRIFAN', depth=20)
-
-#     objB=bpy.context.object
-
-#     target=applyModifier ('DIFFERENCE',objA, objB)
-
-# #    bpy.ops.mesh.primitive_cylinder_add(radius=0.2,location=(loc[0],loc[1],loc[2]), depth=20)
-
-# #    objB=bpy.context.object
-#     #target2=applyModifier ('DIFFERENCE',ob, objB)
-
-#     #finalResult=applyModifier ('UNION',target2, target
-#     bpy.ops.mesh.primitive_cylinder_add(radius=0.495,location=(loc[0],loc[1],loc[2]+0.6),end_fill_type='TRIFAN',depth=20)
-#     objA=bpy.context.object
-#     target2=applyModifier ('DIFFERENCE',ob, objA)
-    
-#     finalResult=applyModifier ('UNION',target2, target)
-#     triangulate_object(finalResult)
-#     return finalResult
-     
-# def make_ob_file(verts):
-#     faces=makeFaces(verts)
-#     ob=createMeshFromData("test",(0,0,0),verts,faces)
-#     return ob
-# def make_Verts(file_path):
-#     verts=readVertices(file_path)
-#     verts=duplicate(verts)
-#     return verts
-  
-     
-# file_path="C:\\Users\\amahdavi\\Desktop\\piece.txt"
-# verts=make_Verts(file_path)
-# sp=readSplit(file_path)
-# ob=make_ob_file(verts)
-# loc=[]
-# loc.append(verts[int(len(verts)/2)-1][0])
-# loc.append(verts[int(len(verts)/2)-1][1])
-# loc.append(verts[int(len(verts)/2)-1][2])
-# finalResult=male_connector(ob,loc)
-# loc=[]
-# loc.append(verts[sp][0])
-# loc.append(verts[sp][1])
-# loc.append(verts[sp][2])
-# finalResult=male_connector(finalResult,loc)
-# filepath = "C:\\Users\\amahdavi\\Desktop\\test4.obj"
-# obj = context.object
-# export_obj(filepath,obj)

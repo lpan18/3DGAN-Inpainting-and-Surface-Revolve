@@ -1,11 +1,11 @@
+
 clear all;
 
 % Init control polygon
 f = fopen('controlpoints.txt','r');
 formatSpec = '%f';
-dim = [4 2];
-cPoly = fscanf(f,formatSpec,dim);
-
+dim = [2 4];
+cPoly = fscanf(f,formatSpec,dim)';
 axis([0 1 0 1]);
 plot(cPoly(:,1), cPoly(:,2),'b-s','MarkerFaceColor','b');
 hold on;
@@ -95,5 +95,6 @@ ylabel('Y')
 zlabel('Z')
 view(130,30)
 % mesh(X1, Y1, Z1);
+
 
 
