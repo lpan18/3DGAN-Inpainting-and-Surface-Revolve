@@ -78,8 +78,8 @@ class ModelInpaint():
                                              processed[ i ],
                                              1 - masks[ i ] )
         processed = torch.tensor( processed ).permute( 0, 3, 2, 1 )
-        return ( processed * 2.0 - 1.0 ).cuda()
-
+        return ((processed-0.5)/0.5).cuda()
+        
     def inpaint( self, corrupted, masks, test=False ):
         if test:
             self.batch_size = 1

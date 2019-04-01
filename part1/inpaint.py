@@ -23,11 +23,12 @@ def parse_args():
     parser.add_argument( '--generator',
                          type=str,
                          help='Pretrained generator',
-                         default='models/gen_28000.pt') #'/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/gen_9600.pt' )
+                         default='models/gen_28000.pt' ) #'/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/gen_9600.pt' )
+                         
     parser.add_argument( '--discriminator',
                          type=str,
                          help='Pretrained discriminator',
-                         default= 'models/dis_28000.pt')
+                         default='models/dis_28000.pt' ) #'/home/csa102/CMPT743/PyTorch-GAN/implementations/semantic_image_inpainting/models/dis_9600.pt' )
                          
     parser.add_argument( '--imgSize',
                          type=int,
@@ -69,18 +70,18 @@ def parse_args():
 
 def saveimages( corrupted, completed, blended, index ):
     os.makedirs( 'completion', exist_ok=True )
-    save_image( corrupted,
-                'completion/%d_corrupted.png' % index,
+    save_image( corrupted * 0.5 + 0.5,
+                'completion/28000/%d_corrupted.png' % index,
                 nrow=corrupted.shape[ 0 ] // 5,
-                normalize=True )
-    save_image( completed,
-                'completion/%d_completed.png' % index,
+                normalize=False )
+    save_image( completed * 0.5 + 0.5,
+                'completion/28000/%d_completed.png' % index,
                 nrow=completed.shape[ 0 ] // 5,
-                normalize=True )
-    save_image( blended,
-                'completion/%d_blended.png' % index,
+                normalize=False )
+    save_image( blended * 0.5 + 0.5,
+                'completion/28000/%d_blended.png' % index,
                 nrow=corrupted.shape[ 0 ] // 5,
-                normalize=True )
+                normalize=False )
 
 def generate_mask(self, imgSize):
     mask = torch.ones(1,imgSize,imgSize)
@@ -104,11 +105,12 @@ def test():
             ] ) 
 
     image = transform(image)
-    mask = generate_mask(image, args.imgSize)
-    mask = np.stack((mask,) * 3, axis=1 )
-    corrupted = image * torch.tensor(mask)
-    completed, blended = m.inpaint(corrupted, mask, test = True)    
-    saveimages(corrupted, completed, blended, 1000000)
+    for i in range(5):
+      mask = generate_mask(image, args.imgSize)
+      mask = np.stack((mask,) * 3, axis=1 )
+      corrupted = image * torch.tensor(mask)
+      completed, blended = m.inpaint(corrupted, mask, test = True)    
+      saveimages(corrupted, completed, blended, i)
 
 def main():
     # Configure data loader
