@@ -13,4 +13,4 @@ completion/
 *.pdf
 *.docx
 *.txt
-other/
+*.log
